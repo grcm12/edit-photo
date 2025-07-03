@@ -4,6 +4,7 @@ from PIL import Image, ImageEnhance, ImageOps
 import io
 import cv2
 import numpy as np
+import os
 
 app = Flask(__name__)
 
@@ -28,10 +29,13 @@ def apply_blur_background(original, mask):
     mask_np = np.array(mask.convert("L"))
 
     blurred = cv2.GaussianBlur(original_np, (51, 51), 0)
-
     result_np = np.where(mask_np[:, :, None] > 0, original_np, blurred)
     result_img = Image.fromarray(result_np.astype('uint8'), 'RGB')
     return result_img
+
+@app.route('/')
+def home():
+    return "Hello from Flask on Render!"
 
 @app.route('/process-image', methods=['POST'])
 def process_image():
@@ -41,7 +45,6 @@ def process_image():
     image_file = request.files['image']
     image = Image.open(image_file.stream).convert("RGBA")
 
-    # Background remove
     remove_bg = request.form.get("remove_bg", "false").lower() == "true"
     bg_blur = request.form.get("bg_blur", "false").lower() == "true"
     bg_color = request.form.get("bg_color", "").strip()
@@ -58,11 +61,9 @@ def process_image():
         else:
             image = image_no_bg
 
-    # Light adjustment
     if request.form.get("light_fix", "false").lower() == "true":
         image = enhance_image_light(image)
 
-    # Resize
     try:
         width = int(request.form.get("resize_width", 0))
         height = int(request.form.get("resize_height", 0))
@@ -74,38 +75,24 @@ def process_image():
     except:
         pass
 
-    # Format conversion
     output_format = request.form.get("output_format", "png").lower()
     if output_format == "jpg":
         output_format = "jpeg"
 
-    # Compression placeholder
     compress = request.form.get("compress", "false").lower() == "true"
 
-    # Final save to memory
     output_io = io.BytesIO()
     save_kwargs = {"format": output_format.upper()}
     if compress and output_format in ["jpeg", "webp"]:
         save_kwargs["optimize"] = True
         save_kwargs["quality"] = 75
+
     image = image.convert("RGB") if output_format != "png" else image
     image.save(output_io, **save_kwargs)
     output_io.seek(0)
 
     return send_file(output_io, mimetype=f"image/{output_format}")
 
-from flask import Flask
-import os
-
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    return "Hello from Flask on Render!"
-
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
-
-
