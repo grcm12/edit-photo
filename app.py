@@ -5,7 +5,7 @@ import io
 import cv2
 import numpy as np
 
-app = Flask(_name_)
+app = Flask(__name__)
 
 def convert_unit(value, unit, dpi=96):
     if unit == "px":
