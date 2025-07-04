@@ -24,10 +24,25 @@ def enhance_image_light(img):
     enhancer = ImageEnhance.Contrast(img)
     return enhancer.enhance(1.1)
 
+def enhance_face_quality(img):
+    # Convert PIL to OpenCV
+    img_np = np.array(img.convert("RGB"))
+
+    # Apply bilateral filter to smooth skin while preserving edges
+    filtered = cv2.bilateralFilter(img_np, d=9, sigmaColor=75, sigmaSpace=75)
+
+    # Back to PIL
+    result = Image.fromarray(filtered)
+
+    # Extra enhancement
+    result = ImageEnhance.Sharpness(result).enhance(1.5)
+    result = ImageEnhance.Contrast(result).enhance(1.2)
+
+    return result
+
 def apply_blur_background(original, mask):
     original_np = np.array(original.convert("RGB"))
     mask_np = np.array(mask.convert("L"))
-
     blurred = cv2.GaussianBlur(original_np, (51, 51), 0)
     result_np = np.where(mask_np[:, :, None] > 0, original_np, blurred)
     result_img = Image.fromarray(result_np.astype('uint8'), 'RGB')
@@ -45,6 +60,7 @@ def process_image():
     image_file = request.files['image']
     image = Image.open(image_file.stream).convert("RGBA")
 
+    # Background options
     remove_bg = request.form.get("remove_bg", "false").lower() == "true"
     bg_blur = request.form.get("bg_blur", "false").lower() == "true"
     bg_color = request.form.get("bg_color", "").strip()
@@ -61,9 +77,14 @@ def process_image():
         else:
             image = image_no_bg
 
+    # Light enhancement
     if request.form.get("light_fix", "false").lower() == "true":
         image = enhance_image_light(image)
 
+    # Face enhancement (always applied)
+    image = enhance_face_quality(image)
+
+    # Resize
     try:
         width = int(request.form.get("resize_width", 0))
         height = int(request.form.get("resize_height", 0))
@@ -75,12 +96,15 @@ def process_image():
     except:
         pass
 
+    # Output format
     output_format = request.form.get("output_format", "png").lower()
     if output_format == "jpg":
         output_format = "jpeg"
 
+    # Compression
     compress = request.form.get("compress", "false").lower() == "true"
 
+    # Save to memory
     output_io = io.BytesIO()
     save_kwargs = {"format": output_format.upper()}
     if compress and output_format in ["jpeg", "webp"]:
